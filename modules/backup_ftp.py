@@ -1,54 +1,47 @@
 # Importations
+from modules import backup_abstract
 import os
 from ftplib import FTP, error_perm
+import logging
 
-class BackupFTP:
+class BackupFTP(backup_abstract.BackupAbstract):
 
-    # Constructeur qui initialise les champs en fonction du fichier de conf
     def __init__(self, conf):
-        self.user = conf['user']
-        self.password = conf['pass']
-        self.host = conf['host']
-        self.port = int(conf['port'])
-        self.base_path = conf['path']
+        super().__init__(conf)
         self.ftp = FTP()
         self.ftp.encoding = 'utf-8'
 
-    # Procédure complète de sauvegarde
-    def full_backup(self, dirs):
-
+    def _init_connection(self):
         # Connexion
         self.ftp.connect(self.host, self.port)
         self.ftp.login(self.user, self.password)
-        print('CONNECTED')
+        self.logger.info('Connected to server')
 
-        # Sélection du bon dossier
-        self.ftp.cwd(self.base_path)
-
-        # Sauvegarde des fichiers
-        self._save(dirs)
-
-        # Déconnection
+    def _quit_connection(self):
+        # Deconnexion
         self.ftp.quit()
 
-    # Sauvegarde des données sur le serveur distant
-    def _save(self, dirs):
+    def _run_backup(self, dirs):
 
         # Pour chaque dossier
         for dir in dirs:
 
             # Création des sous-dossiers
             for subdir in dir[1:].split('/'):
-                self._make_dir(subdir)
-                self.ftp.cwd(subdir)
+                self._mkdir(subdir)
+                self._cd(subdir)
 
             # Sauvegarde des fichiers
-            self._save_directory(dir)
+            try:
+                self._save_directory(dir)
+            except Exception as e:
+                self.logger.error("Saving {} : {}".format(dir, str(e)))
+            
 
             # Retour à la racine pour l'itération suivante
-            self.ftp.cwd(self.base_path)
+            self._cd(self.base_path)
 
-            
+            self.logger.info("{} directory saved to {}".format(dir, self.host))          
 
     def _save_directory(self, dir):
         # Pour chaque sous-fichier / sous-repertoire
@@ -56,25 +49,24 @@ class BackupFTP:
             fullpath = os.path.join(dir, name)
 
             if os.path.isfile(fullpath):    # Si c'est un sous-fichier
-                print('STORING {} to {}'.format(fullpath, self.host))
                 # On l'envoie sur le serveur en binaire
                 self.ftp.storbinary('STOR {}'.format(name), open(fullpath, 'rb'))
 
             elif os.path.isdir(fullpath):   # Si c'est un sous-dossier
 
-                self._make_dir(name)
+                self._mkdir(name)
 
                 # On se déplace dans le dossier nouvellement créé
-                self.ftp.cwd(name)
+                self._cd(name)
 
                 # On relance cette méthode pour sauvegarder les sous-fichiers / sous-dossier
                 self._save_directory(fullpath)
 
                 # On reviens dans le dossier parent
-                self.ftp.cwd('..')
+                self._cd('..')
     
 
-    def _make_dir(self, name):
+    def _mkdir(self, name):
         try:
             # On crée un sous-dossier du même nom sur le serveur
             self.ftp.mkd(name)
@@ -82,3 +74,29 @@ class BackupFTP:
             # Si le code d'erreur est 550 (le dossier existe déjà), on ignore l'erreur
             # Sinon, on raise l'exception
             if not e.args[0].startswith('550'): raise
+
+    def _ls(self):
+        files = self.ftp.mlsd()
+        return [name for name, infos in files]
+
+    def _cd(self, path):
+        self.ftp.cwd(path)
+
+    def _rmdir(self, name):
+
+        self._cd(name)
+
+        files = [f for f in self._ls() if f != '.' and f != '..']
+        for filename in files:
+            try:
+                self._cd(filename)
+
+                # Si on a réussi, il s'agit d'un dossier
+                self._cd('..')
+                self._rmdir(filename)
+            except Exception:
+                # Si on arrive ici, filename est un fichier
+                self.ftp.delete(filename)
+
+        self._cd('..')
+        self.ftp.rmd(name)

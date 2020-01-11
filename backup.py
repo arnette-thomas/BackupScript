@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 # Importation
-import modules.backup_ftp as bftp
+from modules import backup_ftp, backup_sftp
 import os
+import logging
 
 def get_config():
     conf = {}
@@ -24,7 +25,15 @@ if __name__ == '__main__':
     config = get_config()
     dirs = get_dirs(config)
 
+    # Configuration du logger
+    logging.basicConfig(filename=config['logfile'],
+                            filemode='a',
+                            format='%(asctime)s - %(levelname)s : %(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S',
+                            level=logging.DEBUG)
+
     # Gestion des différents target
+    saver = None
     if config['target'] == 'ftp':
-        ftp_saver = bftp.BackupFTP(config)
-        ftp_saver.full_backup(dirs)
+        saver = backup_ftp.BackupFTP(config)
+    saver.run(dirs)
