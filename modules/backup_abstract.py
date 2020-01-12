@@ -33,6 +33,7 @@ class BackupAbstract:
             self._quit_connection()
         except Exception as e:
             self.logger.error("{} : {}".format(type(e).__name__, str(e)))
+            raise
         self.logger.info('End of backup')
 
     def _init_connection(self):

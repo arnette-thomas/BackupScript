@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Importation
-from modules import backup_ftp, backup_sftp
+from modules import backup_ftp, backup_sftp, backup_ftps
 import os
 import logging
 
@@ -30,10 +30,14 @@ if __name__ == '__main__':
                             filemode='a',
                             format='%(asctime)s - %(levelname)s : %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S',
-                            level=logging.DEBUG)
+                            level=logging.INFO)
 
     # Gestion des différents target
     saver = None
     if config['target'] == 'ftp':
         saver = backup_ftp.BackupFTP(config)
+    elif config['target'] == 'ftps':
+        saver = backup_ftps.BackupFTPS(config)
+    elif config['target'] == 'sftp':
+        saver = backup_sftp.BackupSFTP(config)
     saver.run(dirs)
