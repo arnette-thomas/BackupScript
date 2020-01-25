@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Importation
-from modules import backup_ftp, backup_sftp, backup_ftps, backup_local
+from modules import backup_ftp, backup_sftp, backup_ftps, backup_local, backup_rsync
 import os
 import logging
 
@@ -40,6 +40,8 @@ if __name__ == '__main__':
         saver = backup_ftps.BackupFTPS(config)
     elif config['target'] == 'sftp':
         saver = backup_sftp.BackupSFTP(config)
+    elif config['target'] == 'rsync':
+        saver = backup_rsync.BackupRsync(config)
     elif config['target'] == 'local':
         saver = backup_local.BackupLocal(config)
     saver.run(dirs)
