@@ -1,7 +1,9 @@
 import logging
 import os.path
 import re
+import smtplib
 from datetime import date
+from file_read_backwards import FileReadBackwards
 
 class BackupAbstract:
     """
@@ -19,6 +21,12 @@ class BackupAbstract:
         self.versioning = conf['versioning']
         self.versionscount = int(conf['versionscount'])
         self.logger = logging.getLogger('main')
+        self.loggerfile = conf['logfile']
+        self.smtphost = conf['smtphost']
+        self.smtpport = int(conf['smtpport'])
+        self.emailsender = conf['emailsender']
+        self.passsender = conf['passsender']
+        self.emaildest = conf['emaildest']
 
     def run(self, dirs):
         """
@@ -31,10 +39,41 @@ class BackupAbstract:
             self._create_version_folder()
             self._run_backup(dirs)
             self._quit_connection()
+            mail_subject_header = '[SUCCESS]'
         except Exception as e:
             self.logger.error("{} : {}".format(type(e).__name__, str(e)))
-            raise
+            mail_subject_header = '[FAILURE]'
         self.logger.info('End of backup')
+        self._send_email(mail_subject_header + ' Backup Report')
+
+
+    def _send_email(self, subject):
+        """
+        Méthode permettant d'envoyer un mail
+        """
+
+        try:
+            # Lecture des logs du backup
+            log_lines = []
+            with FileReadBackwards(self.loggerfile, encoding='utf-8') as log_file:
+                for line in log_file:
+                    log_lines.insert(0, line)
+                    if "Starting backup" in line:
+                        break
+
+            # Constitution du message
+            body = "Backup Report : \n" + '\n'.join(log_lines)
+            message = 'Subject: {}\n\n{}'.format(subject, body)
+
+
+            # Envoi du mail
+            with smtplib.SMTP_SSL(self.smtphost, self.smtpport) as smtp:
+                smtp.login(self.emailsender, self.passsender)
+                
+                smtp.sendmail(self.emailsender, [self.emaildest], message)
+
+        except Exception as e:
+            self.logger.error(str(e))
 
     def _init_connection(self):
         """
@@ -109,6 +148,7 @@ class BackupAbstract:
                 self.logger.info('Removed {} directory'.format(old_file))
         
             self._mkdir(new_file)
+            self.logger.info('Created {} directory'.format(new_file))
             self._cd(new_file)
             self.base_path = os.path.join(self.base_path, new_file)
 
